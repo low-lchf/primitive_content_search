@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube 자막 검색기</title>
+  <style>
+    :root {
+      --primary-color: #ff0000;
+      --secondary-color: #065fd4;
+      --bg-color: #f9f9f9;
+      --text-color: #0f0f0f;
+      --border-color: #ddd;
+      --highlight-color: #ffff00;
+    }
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: 'Roboto', 'Noto Sans KR', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      line-height: 1.6;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    
+    header h1 {
+      font-size: 28px;
+      color: var(--primary-color);
+      margin-bottom: 10px;
+    }
+    
+    .search-container {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    
+    .search-form {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    
+    .search-input {
+      flex: 1;
+      min-width: 300px;
+      padding: 12px 15px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    
+    .search-btn {
+      background-color: var(--secondary-color);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 12px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    
+    .search-btn:hover {
+      background-color: #0056b3;
+    }
+    
+    .options {
+      width: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+      margin-top: 15px;
+    }
+    
+    .option-group {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .status {
+      margin: 10px 0;
+      font-size: 14px;
+      color: #666;
+    }
+    
+    .progress-bar {
+      height: 6px;
+      background-color: #eee;
+      border-radius: 3px;
+      margin-bottom: 20px;
+      overflow: hidden;
+      display: none;
+    }
+    
+    .progress {
+      height: 100%;
+      background-color: var(--secondary-color);
+      width: 0%;
+      transition: width 0.3s;
+    }
+    
+    .results-container {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+      margin-bottom: 20px;
+      display: none;
+    }
+    
+    .summary {
+      margin-bottom: 15px;
+      font-weight: bold;
+    }
+    
+    .result-group {
+      margin-bottom: 30px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 20px;
+    }
+    
+    .result-group:last-child {
+      border-bottom: none;
+    }
+    
+    .video-title {
+      font-size: 18px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      color: var(--secondary-color);
+    }
+    
+    .video-title:hover {
+      text-decoration: underline;
+    }
+    
+    .video-id {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 10px;
+    }
+    
+    .subtitle-matches {
+      list-style-type: none;
+    }
+    
+    .subtitle-match {
+      background-color: #f5f5f5;
+      border-radius: 4px;
+      padding: 15px;
+      margin-bottom: 10px;
+    }
+    
+    .match-context {
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    
+    .match-highlight {
+      background-color: var(--highlight-color);
+      padding: 2px 0;
+      font-weight: bold;
+    }
+    
+    .match-time {
+      display: inline-block;
+      background-color: var(--secondary-color);
+      color: white;
+      font-size: 12px;
+      padding: 3px 6px;
+      border-radius: 3px;
+      margin-top: 5px;
+    }
+    
+    .load-error {
+      color: red;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .no-results {
+      text-align: center;
+      padding: 30px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>YouTube 자막 검색기</h1>
+      <p>다운로드한 자막 파일에서 내용을 검색합니다</p>
+    </header>
+    
+    <div class="search-container">
+      <div class="search-form">
+        <input type="text" id="search-input" class="search-input" placeholder="검색어를 입력하세요">
+        <button id="search-btn" class="search-btn">검색</button>
+      </div>
+      
+      <div class="options">
+        <div class="option-group">
+          <input type="checkbox" id="case-sensitive" name="case-sensitive">
+          <label for="case-sensitive">대소문자 구분</label>
+        </div>
+        
+        <div class="option-group">
+          <label for="language-filter">언어:</label>
+          <select id="language-filter" name="language-filter">
+            <option value="all">모든 언어</option>
+            <option value="ko">한국어</option>
+            <option value="en">영어</option>
+          </select>
+        </div>
+      </div>
+      
+      <div id="status" class="status"></div>
+      <div class="progress-bar" id="progress-bar">
+        <div class="progress" id="progress"></div>
+      </div>
+    </div>
+    
+    <div id="results-container" class="results-container">
+      <div id="summary" class="summary"></div>
+      <div id="results"></div>
+    </div>
+  </div>
+
+  <script>
+    // 전역 변수 선언
+    let mappingData = null;
+    let subtitleCache = {}; // 검색 속도 향상을 위한 캐시
+    
+    // 페이지 로드 완료 시 매핑 데이터 로드
+    document.addEventListener('DOMContentLoaded', () => {
+      loadMappingData();
+      
+      // 검색 버튼 클릭 이벤트 리스너
+      document.getElementById('search-btn').addEventListener('click', () => {
+        performSearch();
+      });
+      
+      // 엔터 키 이벤트 리스너
+      document.getElementById('search-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          performSearch();
+        }
+      });
+    });
+    
+    // 매핑 데이터 로드 함수
+    async function loadMappingData() {
+      try {
+        const statusElement = document.getElementById('status');
+        statusElement.textContent = '매핑 데이터 로드 중...';
+        
+        const response = await fetch('./subtitles/subtitle_mapping.json');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        mappingData = await response.json();
+        
+        // 언어 필터 옵션 업데이트
+        updateLanguageOptions();
+        
+        statusElement.textContent = `${mappingData.totalVideos}개 비디오, ${mappingData.totalSubtitles}개 자막 파일이 로드되었습니다.`;
+      } catch (error) {
+        console.error('매핑 데이터 로드 실패:', error);
+        document.getElementById('status').innerHTML = `
+          <div class="load-error">
+            자막 매핑 데이터를 로드할 수 없습니다. 
+            <br>먼저 자막 다운로더를 실행해 자막을 다운로드하세요.
+            <br>Error: ${error.message}
+          </div>`;
+      }
+    }
+    
+    // 언어 필터 옵션 업데이트
+    function updateLanguageOptions() {
+      if (!mappingData) return;
+      
+      const languageSet = new Set();
+      
+      // 모든 비디오의 자막에서 사용된 언어 수집
+      mappingData.videos.forEach(video => {
+        video.subtitles.forEach(subtitle => {
+          languageSet.add(subtitle.language);
+        });
+      });
+      
+      // 언어 선택 드롭다운 업데이트
+      const languageFilter = document.getElementById('language-filter');
+      
+      // 기존 옵션 저장
+      const allOption = languageFilter.options[0];
+      
+      // 기존 옵션 초기화
+      languageFilter.innerHTML = '';
+      
+      // '모든 언어' 옵션 다시 추가
+      languageFilter.appendChild(allOption);
+      
+      // 언어 옵션 추가
+      Array.from(languageSet).sort().forEach(lang => {
+        const option = document.createElement('option');
+        option.value = lang;
+        option.textContent = getLanguageName(lang);
+        languageFilter.appendChild(option);
+      });
+    }
+    
+    // 언어 코드를 언어 이름으로 변환
+    function getLanguageName(langCode) {
+      const languageNames = {
+        'ko': '한국어',
+        'en': '영어',
+        'ja': '일본어',
+        'zh': '중국어',
+        'es': '스페인어',
+        'fr': '프랑스어',
+        'de': '독일어',
+        'ru': '러시아어',
+        'it': '이탈리아어',
+        'pt': '포르투갈어'
+      };
+      
+      return languageNames[langCode] || langCode;
+    }
+    
+    // 검색 실행 함수
+    async function performSearch() {
+      const searchInput = document.getElementById('search-input');
+      const keyword = searchInput.value.trim();
+      
+      if (!keyword) {
+        alert('검색어를 입력하세요.');
+        return;
+      }
+      
+      if (!mappingData) {
+        alert('매핑 데이터가 로드되지 않았습니다. 페이지를 새로고침 후 다시 시도하세요.');
+        return;
+      }
+      
+      // 검색 옵션
+      const caseSensitive = document.getElementById('case-sensitive').checked;
+      const languageFilter = document.getElementById('language-filter').value;
+      
+      // UI 초기화
+      const statusElement = document.getElementById('status');
+      const progressBar = document.getElementById('progress-bar');
+      const progress = document.getElementById('progress');
+      const resultsContainer = document.getElementById('results-container');
+      const summary = document.getElementById('summary');
+      const resultsElement = document.getElementById('results');
+      
+      statusElement.textContent = '검색 중...';
+      progressBar.style.display = 'block';
+      progress.style.width = '0%';
+      resultsContainer.style.display = 'none';
+      
+      // 검색 결과 저장 변수
+      const searchResults = [];
+      
+      // 처리할 자막 파일 목록 생성
+      const subtitleFiles = [];
+      mappingData.videos.forEach(video => {
+        video.subtitles.forEach(subtitle => {
+          // 언어 필터링
+          if (languageFilter === 'all' || subtitle.language === languageFilter) {
+            subtitleFiles.push({
+              videoId: video.id,
+              videoTitle: video.title,
+              subtitle: subtitle
+            });
+          }
+        });
+      });
+      
+      // 진행 상황 업데이트 함수
+      let processedCount = 0;
+      function updateProgress() {
+        processedCount++;
+        const percentage = (processedCount / subtitleFiles.length) * 100;
+        progress.style.width = `${percentage}%`;
+        statusElement.textContent = `검색 중... (${processedCount}/${subtitleFiles.length})`;
+      }
+      
+      // 병렬 처리를 위한 배치 크기
+      const BATCH_SIZE = 5;
+      
+      // 배치 단위로 처리
+      for (let i = 0; i < subtitleFiles.length; i += BATCH_SIZE) {
+        const batch = subtitleFiles.slice(i, i + BATCH_SIZE);
+        
+        // 병렬 처리
+        await Promise.all(batch.map(async file => {
+          // SRT 파일 로드 및 검색
+          const matches = await searchInSubtitle(file, keyword, caseSensitive);
+          
+          if (matches.length > 0) {
+            searchResults.push({
+              videoId: file.videoId,
+              videoTitle: file.videoTitle,
+              subtitle: file.subtitle,
+              matches: matches
+            });
+          }
+          
+          updateProgress();
+        }));
+      }
+      
+      // 검색 완료 후 UI 업데이트
+      statusElement.textContent = '검색 완료';
+      progressBar.style.display = 'none';
+      resultsContainer.style.display = 'block';
+      
+      // 결과 표시
+      displayResults(searchResults, keyword, caseSensitive);
+    }
+    
+    // SRT 파일 로드 및 검색 함수
+    async function searchInSubtitle(file, keyword, caseSensitive) {
+      const filePath = file.subtitle.filepath;
+      
+      // 캐시에서 자막 내용 확인
+      if (!subtitleCache[filePath]) {
+        try {
+          const response = await fetch(filePath);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          
+          const content = await response.text();
+          
+          // SRT 파싱 및 캐싱
+          subtitleCache[filePath] = parseSRT(content);
+        } catch (error) {
+          console.error(`파일 로드 실패: ${filePath}`, error);
+          return [];
+        }
+      }
+      
+      // 자막에서 검색
+      const subtitles = subtitleCache[filePath];
+      const matches = [];
+      
+      for (const subtitle of subtitles) {
+        const text = subtitle.text;
+        
+        let searchText = text;
+        let searchKeyword = keyword;
+        
+        if (!caseSensitive) {
+          searchText = text.toLowerCase();
+          searchKeyword = keyword.toLowerCase();
+        }
+        
+        if (searchText.includes(searchKeyword)) {
+          matches.push({
+            text: text,
+            time: subtitle.time,
+            index: subtitle.index
+          });
+        }
+      }
+      
+      return matches;
+    }
+    
+    // SRT 파일 파싱 함수
+    function parseSRT(content) {
+      const lines = content.split(/\r?\n/);
+      const subtitles = [];
+      
+      let index = '';
+      let time = '';
+      let text = [];
+      let isText = false;
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        
+        if (line === '') {
+          // 빈 줄이면 현재 자막 항목 저장
+          if (index && time && text.length > 0) {
+            subtitles.push({
+              index: index,
+              time: time,
+              text: text.join(' ').replace(/\s+/g, ' ').trim()
+            });
+          }
+          
+          // 초기화
+          index = '';
+          time = '';
+          text = [];
+          isText = false;
+        } else if (!index) {
+          // 첫 번째 줄은 인덱스
+          if (/^\d+$/.test(line)) {
+            index = line;
+          }
+        } else if (!time) {
+          // 두 번째 줄은 시간
+          if (line.includes('-->')) {
+            time = line;
+          }
+        } else {
+          // 세 번째 줄부터는 텍스트
+          text.push(line);
+          isText = true;
+        }
+      }
+      
+      // 마지막 자막 항목 저장
+      if (index && time && text.length > 0) {
+        subtitles.push({
+          index: index,
+          time: time,
+          text: text.join(' ').replace(/\s+/g, ' ').trim()
+        });
+      }
+      
+      return subtitles;
+    }
+    
+    // 검색 결과 표시 함수
+    function displayResults(results, keyword, caseSensitive) {
+      const resultsElement = document.getElementById('results');
+      const summaryElement = document.getElementById('summary');
+      
+      // 결과 요약
+      const totalMatches = results.reduce((sum, result) => sum + result.matches.length, 0);
+      summaryElement.textContent = `${results.length}개 비디오에서 ${totalMatches}개의 일치하는 자막을 찾았습니다.`;
+      
+      // 결과가 없는 경우
+      if (results.length === 0) {
+        resultsElement.innerHTML = '<div class="no-results">검색 결과가 없습니다.</div>';
+        return;
+      }
+      
+      // 결과 HTML 생성
+      let resultsHTML = '';
+      
+      results.forEach(result => {
+        resultsHTML += `
+          <div class="result-group">
+            <div class="video-title" onclick="window.open('https://youtube.com/watch?v=${result.videoId}', '_blank')">
+              ${result.videoTitle}
+            </div>
+            <div class="video-id">비디오 ID: ${result.videoId} | 언어: ${getLanguageName(result.subtitle.language)}</div>
+            <ul class="subtitle-matches">
+        `;
+        
+        result.matches.forEach(match => {
+          // 검색어 하이라이트 처리
+          let highlightedText = match.text;
+          
+          if (caseSensitive) {
+            const regex = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+            highlightedText = highlightedText.replace(regex, `<span class="match-highlight">$&</span>`);
+          } else {
+            const regex = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+            highlightedText = highlightedText.replace(regex, `<span class="match-highlight">$&</span>`);
+          }
+          
+          // 타임코드에서 시작 시간만 추출
+          const timeStart = match.time.split(' --> ')[0];
+          
+          // 타임코드를 초로 변환
+          const seconds = convertTimeToSeconds(timeStart);
+          
+          resultsHTML += `
+            <li class="subtitle-match">
+              <div class="match-context">${highlightedText}</div>
+              <a href="https://youtube.com/watch?v=${result.videoId}&t=${Math.floor(seconds)}" target="_blank" class="match-time">${timeStart}</a>
+            </li>
+          `;
+        });
+        
+        resultsHTML += `
+            </ul>
+          </div>
+        `;
+      });
+      
+      resultsElement.innerHTML = resultsHTML;
+    }
+    
+    // 타임코드를 초로 변환하는 함수
+    function convertTimeToSeconds(timeString) {
+      // 00:00:00,000 형식을 파싱
+      const parts = timeString.split(':');
+      const seconds = parts[2].split(',');
+      
+      return (
+        parseInt(parts[0]) * 3600 +
+        parseInt(parts[1]) * 60 +
+        parseFloat(`${seconds[0]}.${seconds[1]}`)
+      );
+    }
+  </script>
+</body>
+</html> 
